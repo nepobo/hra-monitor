@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# shellcheck source=bin/_lib.sh
+source "$(cd "$(dirname "$0")" && pwd)/_lib.sh"
+run_ruby bin/add-app.rb "$@"

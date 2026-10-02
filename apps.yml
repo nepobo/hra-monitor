@@ -1,0 +1,37 @@
+# Registry of monitored applications. Source of truth for scrape targets.
+# Add apps with `bin/add-app` or edit this file, then run `bin/render` and `bin/apply`.
+#
+# scrape.url is the stable HTTP(S) endpoint Prometheus will pull.
+# Web roles should use the public HTTPS host. Sidekiq roles should use
+# host:published-port (see templates/app/deploy.yml.snippet).
+# nodes are hosts that run node-exporter on :9100.
+
+apps:
+  hra-ocr:
+    env: production
+    healthcheck: https://rgcdashboard.org/up
+    scrape:
+      - job: web
+        url: https://rgcdashboard.org/metrics
+        labels:
+          role: web
+      - job: worker_ocr
+        url: http://64.23.190.193:9395/metrics
+        labels:
+          role: worker_ocr
+      - job: worker_default
+        url: http://64.23.190.193:9396/metrics
+        labels:
+          role: worker_default
+      - job: worker_search
+        url: http://24.144.91.119:9394/metrics
+        labels:
+          role: worker_search
+      - job: worker_search
+        url: http://146.190.161.149:9394/metrics
+        labels:
+          role: worker_search
+    nodes:
+      - 64.23.190.193
+      - 24.144.91.119
+      - 146.190.161.149

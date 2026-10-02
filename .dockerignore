@@ -1,0 +1,13 @@
+.git
+.env
+.kamal
+tmp
+README.md
+vendor
+bin
+lib
+apps.yml
+templates
+prometheus
+*.md
+Dockerfile.kamal

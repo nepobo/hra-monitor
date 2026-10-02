@@ -1,0 +1,8 @@
+.env
+.bundle
+/tmp
+/log
+.kamal/console-history
+*.swp
+.DS_Store
+vendor/bundle

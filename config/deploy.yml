@@ -1,0 +1,110 @@
+<% require "dotenv"; Dotenv.load(".env") %>
+<%
+  git_sha = `git rev-parse --verify HEAD 2>/dev/null`.to_s.strip
+  deploy_version = git_sha.empty? ? ENV.fetch("VERSION", "dev-#{Time.now.utc.strftime("%Y%m%d%H%M%S")}") : git_sha
+%>
+
+# Grafana is the public Kamal service. Prometheus, Alertmanager, and Blackbox
+# run as Docker accessories on the same host and stay on the internal kamal network.
+service: hra-monitor
+
+image: hra-monitor
+
+# Git SHA when the repo has commits; otherwise a timestamp so Kamal can build
+# before the first commit (this repo currently has no HEAD).
+version: <%= deploy_version %>
+
+ssh:
+  user: root
+
+servers:
+  web:
+    hosts:
+      - <%= ENV.fetch("MONITOR_HOST") %>
+
+proxy:
+  ssl: true
+  host: <%= ENV.fetch("GRAFANA_HOST") %>
+  app_port: 3000
+  healthcheck:
+    path: /api/health
+    interval: 5
+    timeout: 10
+
+registry:
+  server: registry.digitalocean.com/hra
+  username:
+    - KAMAL_REGISTRY_TOKEN
+  password:
+    - KAMAL_REGISTRY_TOKEN
+
+builder:
+  dockerfile: Dockerfile
+  arch: amd64
+
+env:
+  clear:
+    GF_SECURITY_ADMIN_USER: admin
+    GF_SERVER_HTTP_ADDR: "0.0.0.0"
+    GF_SERVER_HTTP_PORT: "3000"
+    GF_SERVER_ROOT_URL: https://<%= ENV.fetch("GRAFANA_HOST") %>
+    GF_USERS_ALLOW_SIGN_UP: "false"
+    GF_AUTH_ANONYMOUS_ENABLED: "false"
+    GF_ANALYTICS_REPORTING_ENABLED: "false"
+    GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    GF_UNIFIED_ALERTING_ENABLED: "true"
+  secret:
+    - GF_SECURITY_ADMIN_PASSWORD
+    - KAMAL_REGISTRY_TOKEN
+
+volumes:
+  - grafana_data:/var/lib/grafana
+
+# Accessories pull from Docker Hub (not the DigitalOcean app registry).
+# Container names must match Grafana datasource URLs and prometheus.yml.
+accessories:
+  prometheus:
+    service: hra-monitor-prometheus
+    image: docker.io/prom/prometheus:v2.55.1
+    host: <%= ENV.fetch("MONITOR_HOST") %>
+    network: kamal
+    options:
+      entrypoint: /bin/sh
+    cmd: "/entrypoint.sh --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=30d --web.enable-lifecycle --web.console.libraries=/usr/share/prometheus/console_libraries --web.console.templates=/usr/share/prometheus/consoles"
+    env:
+      secret:
+        - PROMETHEUS_METRICS_TOKEN
+    directories:
+      - prometheus_data:/prometheus
+    files:
+      - prometheus/entrypoint.sh:/entrypoint.sh
+      - prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus/alerts.yml:/etc/prometheus/alerts.yml
+      - prometheus/file_sd/rails.yml:/etc/prometheus/file_sd/rails.yml
+      - prometheus/file_sd/nodes.yml:/etc/prometheus/file_sd/nodes.yml
+      - prometheus/file_sd/blackbox.yml:/etc/prometheus/file_sd/blackbox.yml
+
+  alertmanager:
+    service: hra-monitor-alertmanager
+    image: docker.io/prom/alertmanager:v0.28.1
+    host: <%= ENV.fetch("MONITOR_HOST") %>
+    network: kamal
+    cmd: "--config.file=/etc/alertmanager/alertmanager.yml --storage.path=/alertmanager"
+    directories:
+      - alertmanager_data:/alertmanager
+    files:
+      - prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+
+  blackbox:
+    service: hra-monitor-blackbox
+    image: docker.io/prom/blackbox-exporter:v0.26.0
+    host: <%= ENV.fetch("MONITOR_HOST") %>
+    network: kamal
+    cmd: "--config.file=/etc/blackbox/blackbox.yml"
+    files:
+      - prometheus/blackbox.yml:/etc/blackbox/blackbox.yml
+
+aliases:
+  shell: app exec --interactive --reuse "sh"
+  logs: app logs -f
+  prometheus-reload: accessory exec prometheus -- wget -qO- --post-data='' http://127.0.0.1:9090/-/reload

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# First-time deploy of the monitoring stack (step 1).
+# Requires a filled-in .env and SSH access to MONITOR_HOST.
+set -euo pipefail
+# shellcheck source=bin/_lib.sh
+source "$(cd "$(dirname "$0")" && pwd)/_lib.sh"
+
+require_deploy_env
+run_ruby bin/render.rb
+
+echo "Deploying Grafana + booting Prometheus, Alertmanager, and Blackbox on ${MONITOR_HOST}…"
+echo "Grafana will be at https://${GRAFANA_HOST}"
+echo
+echo "Firewall on the monitor host: allow 22/80/443. Do not publish 9090 or 9093."
+echo
+
+run_kamal setup
+
+echo
+echo "Setup finished."
+echo "Open https://${GRAFANA_HOST}  (admin / GRAFANA_ADMIN_PASSWORD)"
+echo "Check accessories: bin/kamal accessory details prometheus"
+echo "Targets for hra-ocr stay down until step 2 (app instrumentation)."

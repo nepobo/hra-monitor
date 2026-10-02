@@ -1,0 +1,44 @@
+# Snippets to merge into config/deploy.yml of the Rails app.
+# Web /metrics is scraped over the existing HTTPS kamal-proxy host.
+# Sidekiq roles publish unique host ports because several workers share a machine.
+
+# env:
+#   clear:
+#     PROMETHEUS_METRICS_PORT: "9394"
+#     PROMETHEUS_METRICS_BIND: "0.0.0.0"
+#   secret:
+#     - PROMETHEUS_METRICS_TOKEN
+
+# servers:
+#   worker_ocr:
+#     options:
+#       publish:
+#         - "9395:9394"
+#   worker_default:
+#     options:
+#       publish:
+#         - "9396:9394"
+#   worker_search:
+#     options:
+#       publish:
+#         - "9394:9394"
+
+# Boot node-exporter ONCE per host, not once per role / app.
+# If another Kamal app already runs node-exporter on the host, skip this.
+#
+# accessories:
+#   node_exporter:
+#     image: prom/node-exporter:v1.9.1
+#     hosts:
+#       - 64.23.190.193
+#       - 24.144.91.119
+#       - 146.190.161.149
+#     network: host
+#     volumes:
+#       - "/:/host:ro,rslave"
+#     options:
+#       pid: host
+#     cmd: --path.rootfs=/host --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host/sys|host/proc|host/dev|host/run)($|/)
+
+# .kamal/secrets
+# PROMETHEUS_METRICS_TOKEN=$PROMETHEUS_METRICS_TOKEN

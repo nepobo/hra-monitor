@@ -1,0 +1,8 @@
+# Add to config/puma.rb
+plugin :yabeda
+
+# Add to config/routes.rb
+mount Yabeda::Prometheus::Exporter => "/metrics"
+
+# Optional: skip Rack::Attack throttling for scrapes
+# Rack::Attack.safelist("prometheus metrics") { |req| req.path == "/metrics" }

@@ -1,0 +1,134 @@
+groups:
+  - name: uptime
+    rules:
+      - alert: SiteDown
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.app }} is down"
+          description: "Blackbox probe failed for {{ $labels.instance }}."
+
+      - alert: SslCertExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 14
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS certificate for {{ $labels.app }} expires in under 14 days"
+          description: "Target {{ $labels.instance }} certificate expires in {{ $value | printf \"%.0f\" }} days."
+
+  - name: scrape
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus target down ({{ $labels.job }})"
+          description: "{{ $labels.instance }} job={{ $labels.job }} app={{ $labels.app }} role={{ $labels.role }} has been down for 2 minutes."
+
+      - alert: ScrapeSlow
+        expr: scrape_duration_seconds > 8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow scrape for {{ $labels.instance }}"
+          description: "Scrape duration is {{ $value | printf \"%.2f\" }}s (timeout is 10s)."
+
+  - name: rails
+    rules:
+      - alert: RailsHighErrorRate
+        expr: |
+          sum by (app) (rate(rails_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum by (app) (rate(rails_requests_total[5m])), 0.01)
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.app }} 5xx rate is above 5%"
+          description: "Error ratio is {{ $value | printf \"%.2f\" }} over the last 5 minutes."
+
+      - alert: PumaPoolExhausted
+        expr: avg by (app, instance) (puma_pool_capacity) < 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Puma thread pool exhausted on {{ $labels.app }}"
+          description: "puma_pool_capacity has been below 1 on {{ $labels.instance }}."
+
+  - name: sidekiq
+    rules:
+      - alert: SidekiqQueueLatencyHigh
+        expr: max by (app, queue) (sidekiq_queue_latency_seconds) > 300
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sidekiq queue {{ $labels.queue }} on {{ $labels.app }} is delayed"
+          description: "Queue latency is {{ $value | printf \"%.0f\" }}s."
+
+      - alert: SidekiqOcrQueueLatencyHigh
+        expr: max by (app) (sidekiq_queue_latency_seconds{queue="ocr"}) > 120
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OCR queue on {{ $labels.app }} is delayed"
+          description: "ocr queue latency is {{ $value | printf \"%.0f\" }}s (concurrency is 1)."
+
+      - alert: SidekiqHighFailureRate
+        expr: |
+          sum by (app) (rate(sidekiq_jobs_failed_total[10m]))
+          /
+          clamp_min(sum by (app) (rate(sidekiq_jobs_executed_total[10m])), 0.01)
+          > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.app }} Sidekiq failure rate is above 10%"
+          description: "Failure ratio is {{ $value | printf \"%.2f\" }}."
+
+  - name: nodes
+    rules:
+      - alert: NodeDiskAlmostFull
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype=~"ext4|ext3|xfs|btrfs"}
+            /
+            node_filesystem_size_bytes{fstype=~"ext4|ext3|xfs|btrfs"}
+          ) < 0.15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk on {{ $labels.instance }} is above 85% full"
+          description: "Filesystem {{ $labels.mountpoint }} has {{ $value | printf \"%.0f%%\" }} free."
+
+      - alert: NodeMemoryHigh
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory on {{ $labels.instance }} is above 90%"
+          description: "Memory usage is {{ $value | printf \"%.2f\" }}."
+
+      - alert: NodeCpuHigh
+        expr: |
+          avg by (instance) (
+            1 - rate(node_cpu_seconds_total{mode="idle"}[5m])
+          ) > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU on {{ $labels.instance }} is above 90%"
+          description: "CPU usage is {{ $value | printf \"%.2f\" }}."

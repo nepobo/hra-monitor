@@ -1,0 +1,114 @@
+{
+  "uid": "hra-rails",
+  "title": "Rails / Puma",
+  "tags": ["hra", "rails"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "app",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(up{job=\"rails\"}, app)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "role",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(up{job=\"rails\",app=~\"$app\"}, role)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Request rate",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (app, status) (rate(rails_requests_total{app=~\"$app\",role=~\"$role\"}[$__rate_interval]))",
+          "legendFormat": "{{app}} {{status}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "5xx error rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (app) (rate(rails_requests_total{app=~\"$app\",role=~\"$role\",status=~\"5..\"}[$__rate_interval])) / clamp_min(sum by (app) (rate(rails_requests_total{app=~\"$app\",role=~\"$role\"}[$__rate_interval])), 0.001)",
+          "legendFormat": "{{app}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Request duration p95",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (app, le) (rate(rails_request_duration_seconds_bucket{app=~\"$app\",role=~\"$role\"}[$__rate_interval])))",
+          "legendFormat": "{{app}} p95"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Puma pool capacity",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg by (app, instance) (puma_pool_capacity{app=~\"$app\",role=~\"$role\"})",
+          "legendFormat": "{{app}} {{instance}}"
+        },
+        {
+          "refId": "B",
+          "expr": "avg by (app, instance) (puma_running{app=~\"$app\",role=~\"$role\"})",
+          "legendFormat": "running {{app}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Scrape up",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"rails\",app=~\"$app\",role=~\"$role\"}",
+          "legendFormat": "{{app}} {{role}} {{instance}}"
+        }
+      ]
+    }
+  ]
+}
